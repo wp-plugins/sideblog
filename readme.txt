@@ -1,7 +1,7 @@
 === Sideblog Wordpress Plugin ===
 Contributors: kates
 Donate link: http://www.katesgasis.com/
-Tags: asides
+Tags: asides, sideblog
 Requires at least: 2.1
 Tested up to: 2.1.3
 Stable tag: trunk
