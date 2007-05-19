@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 3.7
+Version: 3.8
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -21,12 +21,14 @@ function sideblog_where($query) {
 	}
 	
 	if(is_feed()){
-		if($sideblog_options['excludefromfeeds']){
+		if(isset($sideblog_options['excludefromfeeds']) && !empty($sideblog_options['excludefromfeeds'])){
 			$query .= " AND $wpdb->post2cat.category_id NOT IN (" . implode(",", $sideblog_options['excludefromfeeds']) . ") ";
 		}		
 	} else {
 		if(!is_category() && !is_single()){
-			$query .= " AND $wpdb->post2cat.category_id NOT IN (" . implode(",", $sideblog_options['setaside']) . ") ";
+			if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
+				$query .= " AND $wpdb->post2cat.category_id NOT IN (" . implode(",", $sideblog_options['setaside']) . ") ";
+			}
 		}
 	}
 	return $query;
@@ -52,10 +54,14 @@ function sideblog_join($query) {
 function sideblog_recent_entries($args) {
 	global $wpdb;
 	$sideblog_options = get_option('sideblog_options');
-	$setasides = implode(",",$sideblog_options['setaside']);
+	if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
+		$setasides = implode(",",$sideblog_options['setaside']);
+	}
 	extract($args);
 	$title = __('Recent Posts');
-	$rows = $wpdb->get_results("SELECT DISTINCT $wpdb->posts.* FROM $wpdb->posts LEFT JOIN $wpdb->post2cat ON($wpdb->posts.ID=$wpdb->post2cat.post_id) WHERE $wpdb->post2cat.category_id NOT IN ($setasides) ORDER BY $wpdb->posts.post_date DESC LIMIT 10");
+	if(strstr($query,"$wpdb->post2cat")===FALSE && isset($setasides)){
+		$rows = $wpdb->get_results("SELECT DISTINCT $wpdb->posts.* FROM $wpdb->posts LEFT JOIN $wpdb->post2cat ON($wpdb->posts.ID=$wpdb->post2cat.post_id) WHERE $wpdb->post2cat.category_id NOT IN ($setasides) ORDER BY $wpdb->posts.post_date DESC LIMIT 10");
+	}
 	if ($rows) :
 ?>
 		<?php echo $before_widget; ?>
@@ -104,7 +110,7 @@ function sideblog($asidecategory=''){
 			return;
 		}
 		$asideid = '';
-		if($sideblog_options['setaside']){
+		if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
 			foreach($sideblog_options['setaside'] as $aside){
 				if($asideid!=''){
 					break;
@@ -114,11 +120,14 @@ function sideblog($asidecategory=''){
 		}
 	} else {
 		$asideid = $wpdb->get_var("SELECT cat_ID FROM " . $wpdb->categories . " WHERE category_nicename='" . $asidecategory . "'");
-		if($sideblog_options['setaside']){
+		if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
 			if(!in_array($asideid,$sideblog_options['setaside'])){
 				echo "Aside category not selected.";
 				return;
 			}
+		} else {
+			echo "Aside category not selected.";
+			return;
 		}
 	}
 	$asidecategory = $asideid;
@@ -309,7 +318,7 @@ function sideblog_install(){
 
 function sideblog_uninstall(){
 	delete_option('sideblog_options');
-	//delete_option('widget_sideblog');
+	delete_option('widget_sideblog');
 
 }
 
@@ -320,27 +329,33 @@ function widget_sideblogwidget($args,$number=1){
 	$title = $options[$number]['title'];
 	$category = $options[$number]['category'];
 
-	if (empty($title))
+	if(empty($title)){
 		$title = '&nbsp;';
+	}
 	echo $before_widget . $before_title . $title . $after_title . "<ul>";
 	sideblog($category);
 	echo "</ul>" . $after_widget;
 }
 
-function widget_sideblogwidget_control($number=1){
+function widget_sideblogwidget_control($number){
 	global $wpdb;
+	$sideblog_options = get_option('sideblog_options');
 	$options = $newoptions = get_option('widget_sideblog');
-	if (isset($_POST["sideblog-submit-$number"])) {
+	if ( !is_array($options) )
+		$options = $newoptions = array();
+	$newoptions['number'] = count($sideblog_options['setaside']);
+	if(isset($_POST["sideblog-submit-$number"])) {
 		$newoptions[$number]['title'] = strip_tags(stripslashes($_POST["sideblog-title-$number"]));
 		$newoptions[$number]['category'] = $_POST["sideblog-category-$number"];
 	}
-	if ($options != $newoptions) {
+	if($options != $newoptions) {
 		$options = $newoptions;
 		update_option('widget_sideblog', $options);
 	}
-	$title = htmlspecialchars($options[$number]['title'], ENT_QUOTES);
-
-	$sideblog_options = get_option('sideblog_options');
+	//$title = htmlspecialchars($options[$number]['title'], ENT_QUOTES);
+	
+	$title = attribute_escape($options[$number]['title']);
+	
 	$rows = $wpdb->get_results("SELECT cat_ID as id, cat_name as name, category_nicename as slug FROM " . $wpdb->categories . " ORDER BY cat_name");
 
 	$catlist = "";
@@ -358,8 +373,8 @@ function widget_sideblogwidget_control($number=1){
 
 ?>
 	<input style="width: 250px;" id="sideblog-title-<?php echo "$number"; ?>" name="sideblog-title-<?php echo "$number"; ?>" type="text" value="<?php echo $title; ?>" />
-	<select name="sideblog-category-<?php echo "$number"; ?>"><?php echo $catlist; ?></select>	
-	<input type="hidden" id="sideblog-submit-<?php echo "$number"; ?>" name="sideblog-submit-<?php echo "$number"; ?>" value="1" />
+	<select name="sideblog-category-<?php echo $number; ?>"><?php echo $catlist; ?></select>	
+	<input type="hidden" id="sideblog-submit-<?php echo $number; ?>" name="sideblog-submit-<?php echo $number; ?>" value="<?php echo $number; ?>" />
 
 <?php
 
@@ -371,10 +386,17 @@ function sideblog_widget_init(){
 		$sideblog_options = get_option('sideblog_options');
 		if($sideblog_options['setaside']){
 			$number = count($sideblog_options['setaside']);
+			$class = array('classname' => 'widget_sideblog');
 			for($i=1;$i<=$number;$i++){
-				$name = array('Sideblog %s',null,$i);
-				register_sidebar_widget($name,'widget_sideblogwidget',$i);
-				register_widget_control($name,'widget_sideblogwidget_control',300,200,$i);
+				$id = "sideblog-$id";
+				$name = sprintf(__('Sideblog %s'),$i);
+				if(function_exists('wp_register_sidebar_widget')){
+					wp_register_sidebar_widget($id, $name,'widget_sideblogwidget',$class, $i);
+					wp_register_widget_control($id, $name,'widget_sideblogwidget_control', array('width'=>300,'height'=>200),$i);
+				} else {
+					register_sidebar_widget($name, 'widget_sideblogwidget', $i);
+					register_widget_control($name, 'widget_sideblogwidget_control', 300,200, $i);
+				}
 			}
 		}
 		register_sidebar_widget('SB Recent Posts','sideblog_recent_entries');
