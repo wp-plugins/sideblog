@@ -12,6 +12,8 @@ A simple aside plugin.
 
 Sideblog is a plugin for Wordpress Blog Platform. It is one way of implementing "Asides" - a series of "short" posts, 1-2 sentences in length.
 
+For Wordpress version 2.2 and below, please visit http://katesgasis.com/download-page.
+
 == Installation ==
 
 While doing the installation procedure, it is recommended to go through all the steps first before viewing the output. If you don't, you'll get nasty error messages.
