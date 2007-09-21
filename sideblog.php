@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 3.8
+Version: 4.0rc1
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -12,43 +12,26 @@ Author URI: http://katesgasis.com
 $sb_defaultformat = "<li>%content% - %permalink%</li>";
 $sb_defaultposts = 10;
 
-function sideblog_where($query) {
-	global $parent_file, $wpdb;
+function sideblog_post_filter($query) {
+	global $parent_file, $wpdb, $wp_query;
 	$sideblog_options = get_option('sideblog_options');
 	
+	
 	if((isset($parent_file)||!empty($parent_file))){
-		return $query;
+		return;
 	}
 	
 	if(is_feed()){
 		if(isset($sideblog_options['excludefromfeeds']) && !empty($sideblog_options['excludefromfeeds'])){
-			$query .= " AND $wpdb->post2cat.category_id NOT IN (" . implode(",", $sideblog_options['excludefromfeeds']) . ") ";
+			$wp_query->set('category__not_in',$sideblog_options['excludefromfeeds']);
 		}		
 	} else {
-		if(!is_category() && !is_single()){
+		if(!is_category() && !is_single() && !is_tag()){
 			if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
-				$query .= " AND $wpdb->post2cat.category_id NOT IN (" . implode(",", $sideblog_options['setaside']) . ") ";
+				$wp_query->set('category__not_in',$sideblog_options['setaside']);
 			}
 		}
 	}
-	return $query;
-
-}
-
-function sideblog_join($query) {
-	global $wpdb;
-	$sideblog_options = get_option('sideblog_options');
-	
-	if((isset($parent_file)||!empty($parent_file))){
-		return $query;
-	}
-	
-	if(!is_category()){
-		if(strstr($query,"$wpdb->post2cat")===FALSE){
-			$query .= " LEFT JOIN $wpdb->post2cat ON (  $wpdb->posts.ID  = $wpdb->post2cat.post_id) ";
-		}
-	} 
-	return $query;
 }
 
 function sideblog_recent_entries($args) {
@@ -59,8 +42,16 @@ function sideblog_recent_entries($args) {
 	}
 	extract($args);
 	$title = __('Recent Posts');
-	if(strstr($query,"$wpdb->post2cat")===FALSE && isset($setasides)){
-		$rows = $wpdb->get_results("SELECT DISTINCT $wpdb->posts.* FROM $wpdb->posts LEFT JOIN $wpdb->post2cat ON($wpdb->posts.ID=$wpdb->post2cat.post_id) WHERE $wpdb->post2cat.category_id NOT IN ($setasides) ORDER BY $wpdb->posts.post_date DESC LIMIT 10");
+	if(strstr($query,"$wpdb->terms")===FALSE && isset($setasides)){
+		$rows = $wpdb->get_results(
+			"SELECT DISTINCT $wpdb->posts.* " .
+			"FROM $wpdb->posts Post " .
+				"LEFT JOIN $wpdb->term_relationships Relationship ON (Post.ID=Relationship.object_id) " .
+				"LEFT JOIN $wpdb->term_taxonomy Taxonomy ON(Relationship.term_taxonomy_id=Taxonomy.term_taxonomy_id) " .
+				"LEFT JOIN $wpdb->terms Term ON (Term.term_id=Taxonomy.term_id) " .
+			"WHERE Terms.term_id NOT IN ($setasides) " .
+				"AND $wpdb->posts.post_type = 'post' " .
+			"ORDER BY $wpdb->posts.post_date DESC LIMIT 10");
 	}
 	if ($rows) :
 ?>
@@ -74,23 +65,6 @@ function sideblog_recent_entries($args) {
 		<?php echo $after_widget; ?>
 <?php
 	endif;
-}
-
-function sideblog_distinct($query) {
-	global $wpdb, $parent_file;
-	
-	if((isset($parent_file)||!empty($parent_file))){
-		return " DISTINCT ";
-	}
-	
-	if((!isset($query)||empty($query))){
-		 $query = " DISTINCT ";
-		 return $query;
-	}
-}
-
-function sideblog_orderby($query) {
-	return $query;
 }
 
 function sideblog($asidecategory=''){
@@ -119,7 +93,7 @@ function sideblog($asidecategory=''){
 			}
 		}
 	} else {
-		$asideid = $wpdb->get_var("SELECT cat_ID FROM " . $wpdb->categories . " WHERE category_nicename='" . $asidecategory . "'");
+		$asideid = $wpdb->get_var("SELECT term_id FROM " . $wpdb->terms . " WHERE slug='" . $asidecategory . "'");
 		if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
 			if(!in_array($asideid,$sideblog_options['setaside'])){
 				echo "Aside category not selected.";
@@ -142,7 +116,18 @@ function sideblog($asidecategory=''){
 	}
 	
 	$now = current_time('mysql');
-	$sideblog_contents = $wpdb->get_results("SELECT $wpdb->posts.ID, $wpdb->posts.post_title, $wpdb->posts.post_content, $wpdb->posts.post_date FROM $wpdb->posts, $wpdb->post2cat WHERE $wpdb->posts.ID = $wpdb->post2cat.post_id AND $wpdb->post2cat.category_id = $asidecategory AND $wpdb->posts.post_status ='publish' AND $wpdb->posts.post_type = 'post' AND $wpdb->posts.post_password ='' AND $wpdb->posts.post_date < '" . $now . "' ORDER BY $wpdb->posts.post_date DESC LIMIT " . $limit);
+	$sideblog_contents = $wpdb->get_results(
+		"SELECT DISTINCT Post.ID, Post.post_title, Post.post_content, Post.post_date " .
+		"FROM $wpdb->posts Post, $wpdb->terms Term, $wpdb->term_taxonomy Taxonomy, $wpdb->term_relationships Relationship " .
+		"WHERE Post.ID = Relationship.object_id " .
+			"AND Term.term_id = $asidecategory " .
+			"AND Taxonomy.term_taxonomy_id = Relationship.term_taxonomy_id " .
+			"AND Taxonomy.term_id=Term.term_id " .
+			"AND Post.post_status ='publish' " .
+			"AND Post.post_type = 'post' " .
+			"AND Post.post_password ='' " .
+			"AND Post.post_date < '" . $now . "' " .
+			"ORDER BY Post.post_date DESC LIMIT " . $limit);
 	
 	$patterns[] = "%title%";
 	$patterns[] = "%content%";
@@ -204,7 +189,12 @@ function sideblog_option_page(){
 	}
 	$sideblog_options = get_option('sideblog_options');
 	
-	$rows = $wpdb->get_results("SELECT cat_ID as id, cat_name as name, category_nicename as slug FROM " . $wpdb->categories . " ORDER BY cat_name");
+	$rows = $wpdb->get_results(
+		"SELECT Term.term_id as id, Term.name, Term.slug " .
+		"FROM $wpdb->terms Term, $wpdb->term_taxonomy Taxonomy " .
+		"WHERE Term.term_id = Taxonomy.term_id " .
+			"AND Taxonomy.taxonomy IN ('category') " .
+		"ORDER BY name");
 	
 	$catlist = "";
 	if($rows) {
@@ -356,7 +346,7 @@ function widget_sideblogwidget_control($number){
 	
 	$title = attribute_escape($options[$number]['title']);
 	
-	$rows = $wpdb->get_results("SELECT cat_ID as id, cat_name as name, category_nicename as slug FROM " . $wpdb->categories . " ORDER BY cat_name");
+	$rows = $wpdb->get_results("SELECT Term.term_id AS id, Term.name, Term.slug FROM " . $wpdb->terms . " Term ORDER BY Term.name");
 
 	$catlist = "";
 	if($rows){
@@ -436,10 +426,7 @@ function sideblog_excerpt($content,$cut = 0, $encode_html = 0) {
 	return $content;
 }
 
-add_filter('posts_where','sideblog_where');
-add_filter('posts_join','sideblog_join');
-add_filter('posts_distinct','sideblog_distinct');
-add_filter('posts_orderby','sideblog_orderby');
+add_action('pre_get_posts','sideblog_post_filter');
 add_action('admin_menu','sideblog_add_option_page');
 register_activation_hook(__FILE__,'sideblog_install');
 register_deactivation_hook(__FILE__,'sideblog_uninstall');
