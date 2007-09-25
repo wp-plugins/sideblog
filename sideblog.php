@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 4.0rc2
+Version: 4.0
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -44,14 +44,14 @@ function sideblog_recent_entries($args) {
 	$title = __('Recent Posts');
 	if(strstr($query,"$wpdb->terms")===FALSE && isset($setasides)){
 		$rows = $wpdb->get_results(
-			"SELECT DISTINCT $wpdb->posts.* " .
+			"SELECT DISTINCT Post.* " .
 			"FROM $wpdb->posts Post " .
 				"LEFT JOIN $wpdb->term_relationships Relationship ON (Post.ID=Relationship.object_id) " .
 				"LEFT JOIN $wpdb->term_taxonomy Taxonomy ON(Relationship.term_taxonomy_id=Taxonomy.term_taxonomy_id) " .
 				"LEFT JOIN $wpdb->terms Term ON (Term.term_id=Taxonomy.term_id) " .
-			"WHERE Terms.term_id NOT IN ($setasides) " .
-				"AND $wpdb->posts.post_type = 'post' " .
-			"ORDER BY $wpdb->posts.post_date DESC LIMIT 10");
+			"WHERE Term.term_id NOT IN ($setasides) " .
+				"AND Post.post_type = 'post' " .
+			"ORDER BY Post.post_date DESC LIMIT 10");
 	}
 	if ($rows) :
 ?>
