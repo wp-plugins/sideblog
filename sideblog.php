@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 4.0
+Version: 4.1
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -43,20 +43,17 @@ function sideblog_recent_entries($args) {
 	extract($args);
 	$title = __('Recent Posts');
 	if(strstr($query,"$wpdb->terms")===FALSE && isset($setasides)){
-		$rows = $wpdb->get_results(
-			"SELECT DISTINCT Post.* " .
-			"FROM $wpdb->posts Post " .
-				"LEFT JOIN $wpdb->term_relationships Relationship ON (Post.ID=Relationship.object_id) " .
-				"LEFT JOIN $wpdb->term_taxonomy Taxonomy ON(Relationship.term_taxonomy_id=Taxonomy.term_taxonomy_id) " .
-				"LEFT JOIN $wpdb->terms Term ON (Term.term_id=Taxonomy.term_id) " .
-			"WHERE Term.term_id NOT IN ($setasides) " .
-				"AND Post.post_type = 'post' " .
-			"ORDER BY Post.post_date DESC LIMIT 10");
+		$wp_query = new WP_Query();
+		$wp_query->set('category__not_in', $sideblog_options['setaside']);
+		$wp_query->set('posts_per_page', 10);
+		$rows = $wp_query->get_posts();
 	}
 	if ($rows) :
 ?>
 		<?php echo $before_widget; ?>
+			<?php if(!empty($title)): ?>
 			<?php echo $before_title . $title . $after_title; ?>
+			<?php endif; ?>
 			<ul>
 			<?php  foreach($rows as $row): ?>
 			<li><a href="<?php echo get_permalink($row->ID); ?>"><?php if ($row->post_title) echo $row->post_title; else echo $row->ID; ?> </a></li>
@@ -116,18 +113,10 @@ function sideblog($asidecategory=''){
 	}
 	
 	$now = current_time('mysql');
-	$sideblog_contents = $wpdb->get_results(
-		"SELECT DISTINCT Post.ID, Post.post_title, Post.post_content, Post.post_date " .
-		"FROM $wpdb->posts Post, $wpdb->terms Term, $wpdb->term_taxonomy Taxonomy, $wpdb->term_relationships Relationship " .
-		"WHERE Post.ID = Relationship.object_id " .
-			"AND Term.term_id = $asidecategory " .
-			"AND Taxonomy.term_taxonomy_id = Relationship.term_taxonomy_id " .
-			"AND Taxonomy.term_id=Term.term_id " .
-			"AND Post.post_status ='publish' " .
-			"AND Post.post_type = 'post' " .
-			"AND Post.post_password ='' " .
-			"AND Post.post_date < '" . $now . "' " .
-			"ORDER BY Post.post_date DESC LIMIT " . $limit);
+	$wp_query = new WP_Query();
+	$wp_query->set('category__in', $sideblog_options['setaside']);
+	$wp_query->set('posts_per_page', $limit);
+	$sideblog_contents = $wp_query->get_posts();
 	
 	$patterns[] = "%title%";
 	$patterns[] = "%content%";
@@ -149,7 +138,7 @@ function sideblog($asidecategory=''){
 			$excerpt2 = sideblog_excerpt($sideblog_content->post_content,$excerptcut[0]);
 
 			$replacements[] = $sideblog_content->post_title;
-			$replacements[] = $sideblog_content->post_content;
+			$replacements[] = wpautop($sideblog_content->post_content);
 			$replacements[] = "<a href=\"" . $permalink . "\">#</a>";
 			$replacements[] = "<a href=\"" . $permalink . "\" title=\"" . $sideblog_content->post_title . "\">" . $sideblog_content->post_title . "</a>";
 			$replacements[] = $sideblog_content->post_date;
@@ -327,10 +316,13 @@ function widget_sideblogwidget($args,$number=1){
 	$title = $options[$number]['title'];
 	$category = $options[$number]['category'];
 
-	if(empty($title)){
-		$title = '&nbsp;';
+	$title = trim($title);
+
+	echo $before_widget;
+	if(!empty($title)){
+		echo $before_title . $title . $after_title;
 	}
-	echo $before_widget . $before_title . $title . $after_title . "<ul>";
+	echo "<ul>";
 	sideblog($category);
 	echo "</ul>" . $after_widget;
 }
