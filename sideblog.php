@@ -114,7 +114,7 @@ function sideblog($asidecategory=''){
 	
 	$now = current_time('mysql');
 	$wp_query = new WP_Query();
-	$wp_query->set('category__in', $asideid);
+	$wp_query->set('category__in', array($asideid));
 	$wp_query->set('posts_per_page', $limit);
 	$sideblog_contents = $wp_query->get_posts();
 	
