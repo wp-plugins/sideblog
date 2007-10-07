@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 4.3
+Version: 4.4
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -26,7 +26,8 @@ function sideblog_post_filter($query) {
 			$wp_query->set('category__not_in',$sideblog_options['excludefromfeeds']);
 		}		
 	} else {
-		if(!is_category() && !is_single() && !is_tag()){
+		//if(!is_category() && !is_single() && !is_tag() && !is_archive()){
+		if(is_home()){	
 			if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
 				$wp_query->set('category__not_in',$sideblog_options['setaside']);
 			}
