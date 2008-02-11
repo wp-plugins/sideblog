@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 4.4
+Version: 4.5
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -132,6 +132,9 @@ function sideblog($asidecategory=''){
 	preg_match("/\d+/",$matches[0],$excerptcut);
 	
 	if($sideblog_contents){
+		if($sideblog_options['order'][$asideid] == 'ASC'){
+			$sideblog_contents = array_reverse($sideblog_contents);
+		}
 		foreach($sideblog_contents as $sideblog_content){			
 			$permalink = get_permalink($sideblog_content->ID);
 			
@@ -234,12 +237,22 @@ function sideblog_option_page(){
 			}
 
 			$displayformat = htmlspecialchars(stripslashes($displayformat));
+			
+			$order_options = '';
+			if($sideblog_options['order'][$row->id] == 'ASC'){
+				$order_options .= "<option value='ASC' selected='true'>Ascending</option>" .
+					"<option value='DESC'>Descending</option>";
+			} else {
+				$order_options .= "<option value='ASC'>Ascending</option>" .
+					"<option value='DESC' selected='true'>Descending</option>";
+			}
 
 			$catlist .= "<tr " . $class . ">\n<td align='center'><input type=\"checkbox\" name=\"sideblog_options[setaside][$row->id]\" value=\"$row->id\" " . $setaside . "/></td>\n";
 			$catlist .= "<td>" . $row->name . "</td>\n";
 			$catlist .= "<td>" . $row->slug . "</td>\n";
 			$catlist .= "<td align='center'><input type=\"text\" name=\"sideblog_options[displayformat][" . $row->id . "]\" value=\"" . $displayformat . "\" style=\"width:90%;\"/></td>\n";
 			$catlist .= "<td align='center'><select name=\"sideblog_options[numentries][" . $row->id . "]\">" . $numentries . "</select></td>";
+			$catlist .= "<td align='center'><select name='sideblog_options[order][" . $row->id . "]'>" . $order_options . "</select></td>";
 			$catlist .= "<td align='center'><input type=\"checkbox\" name=\"sideblog_options[excludefromfeeds][" . $row->id . "]\" value=\"" . $row->id . "\" " . $excludefromfeeds . "/></td>\n</tr>\n";
 		}
 	}
@@ -254,13 +267,15 @@ function sideblog_option_page(){
 						<tr>
 							<th width="8%">Select Categories
 							</th>
-							<th width="15%">Category Name
+							<th width="10%">Category Name
 							</th>
-							<th width="15%">Category Slug
+							<th width="10%">Category Slug
 							</th>
 							<th>Display Format
-							</th>	
+							</th>
 							<th width="8%">Number of Entries
+							</th>
+							<th width="15%">Order
 							</th>
 							<th width="8%">Exclude from Feeds
 							</th>
@@ -432,5 +447,4 @@ add_action('admin_menu','sideblog_add_option_page');
 register_activation_hook(__FILE__,'sideblog_install');
 register_deactivation_hook(__FILE__,'sideblog_uninstall');
 add_action('plugins_loaded','sideblog_widget_init');
-
 ?>
