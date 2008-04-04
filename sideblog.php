@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 4.5
+Version: 5.0
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -12,27 +12,51 @@ Author URI: http://katesgasis.com
 $sb_defaultformat = "<li>%content% - %permalink%</li>";
 $sb_defaultposts = 10;
 
+function sideblog_post_groupby($groupby){
+	if(is_home()){
+		$groupby = '';
+	}
+	return $groupby;
+}
+add_filter('posts_groupby', 'sideblog_post_groupby');
+
+
 function sideblog_post_filter($query) {
-	global $parent_file, $wpdb, $wp_query;
+	global $parent_file, $wpdb; //$wp_query;
+	
 	$sideblog_options = get_option('sideblog_options');
 	
 	
 	if((isset($parent_file)||!empty($parent_file))){
+		$query;
 		return;
 	}
 	
 	if(is_feed()){
 		if(isset($sideblog_options['excludefromfeeds']) && !empty($sideblog_options['excludefromfeeds'])){
-			$wp_query->set('category__not_in',$sideblog_options['excludefromfeeds']);
+			$query = sideblog_remove_category($query,$sideblog_options['excludefromfeeds']);
 		}		
 	} else {
 		//if(!is_category() && !is_single() && !is_tag() && !is_archive()){
 		if(is_home()){	
 			if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
-				$wp_query->set('category__not_in',$sideblog_options['setaside']);
+				$query = sideblog_remove_category($query,$sideblog_options['setaside']);
 			}
 		}
 	}
+	return $query;
+}
+
+function sideblog_remove_category($query,$category){
+	$cat = $query->get('category__in');
+	$cat2 = array_merge($query->get('category__not_in'),$category);
+	foreach($cat2 as $k=>$c){
+		if(in_array($c,$cat)){
+			unset($cat2[$k]);
+		}
+	}
+	$query->set('category__not_in',$cat2);
+	return $query;
 }
 
 function sideblog_recent_entries($args) {
@@ -112,13 +136,14 @@ function sideblog($asidecategory=''){
 	if(!$displayformat){
 		$displayformat = $sb_defaultformat;
 	}
-	
+
 	$now = current_time('mysql');
 	$wp_query = new WP_Query();
 	$wp_query->set('category__in', array($asideid));
 	$wp_query->set('posts_per_page', $limit);
+	$wp_query->set('category__not_in',array());
+	//$wp_query->set('posts_order_by','DESC');
 	$sideblog_contents = $wp_query->get_posts();
-	
 	$patterns[] = "%title%";
 	$patterns[] = "%content%";
 	$patterns[] = "%permalink%";
@@ -133,6 +158,7 @@ function sideblog($asidecategory=''){
 	
 	if($sideblog_contents){
 		if($sideblog_options['order'][$asideid] == 'ASC'){
+			
 			$sideblog_contents = array_reverse($sideblog_contents);
 		}
 		foreach($sideblog_contents as $sideblog_content){			
@@ -140,6 +166,8 @@ function sideblog($asidecategory=''){
 			
 			$excerpt = sideblog_excerpt($sideblog_content->post_content,15);
 			$excerpt2 = sideblog_excerpt($sideblog_content->post_content,$excerptcut[0]);
+
+			$sideblog_content = apply_filters('sideblog_entry', $sideblog_content);
 
 			$replacements[] = $sideblog_content->post_title;
 			$replacements[] = wpautop($sideblog_content->post_content);
@@ -172,6 +200,34 @@ function sideblog($asidecategory=''){
 		}
 	}
 }
+
+
+function sideblog_youtube_thumbnail($entry){
+	if(!preg_match("/http:\/\/www\.youtube\.com/",$entry->post_content)){
+		return $entry;
+	}
+	$permalink = get_permalink($entry->ID);
+	preg_match('/\<embed.*?http:\/\/www\.youtube\.com\/v\/(.*?)\&[^\>]*?\>\<\/embed\>/', $entry->post_content, $matches);
+	$youtube_thumbnail = "<a href='" . $permalink . "'><img src='http://img.youtube.com/vi/" . $matches[1] . "/default.jpg'/></a>";
+	$object_pattern = "/\<object[^\>]*?\>\<param\s+.*?value=.*?www\.youtube\.com.*?\<\/object\>/";
+	$entry->post_content = preg_replace($object_pattern, $youtube_thumbnail, $entry->post_content);
+	return $entry;
+}
+
+function sideblog_metacafe_thumbnail($entry){
+	if(!preg_match("/http:\/\/www\.metacafe\.com/", $entry->post_content)){
+		return $entry;
+	}
+	$permalink = get_permalink($entry->ID);
+	preg_match("/\<embed src=\"http:\/\/www\.metacafe\.com\/fplayer\/([^\/]*)\/.*?\<\/embed\>/", $entry->post_content, $matches);
+	$metacafe_thumbnail = "<a href='" . $permalink . "'><img src='http://www.metacafe.com/thumb/" . $matches[1] . ".jpg'/></a>";
+	$object_pattern = "/\<embed\s+src=[\"\']http:\/\/www\.metacafe\.com.*?\<\/embed\>\<br\>\<font.*?\<\/font\>/";
+	$entry->post_content = preg_replace($object_pattern, $metacafe_thumbnail, $entry->post_content);
+	return $entry;
+}
+
+add_filter('sideblog_entry', 'sideblog_youtube_thumbnail');
+add_filter('sideblog_entry', 'sideblog_metacafe_thumbnail');
 
 function sideblog_option_page(){
 	global $wpdb, $sb_defaultformat, $sb_defaultposts;
@@ -442,7 +498,7 @@ function sideblog_excerpt($content,$cut = 0, $encode_html = 0) {
 	return $content;
 }
 
-add_action('pre_get_posts','sideblog_post_filter');
+add_filter('pre_get_posts','sideblog_post_filter');
 add_action('admin_menu','sideblog_add_option_page');
 register_activation_hook(__FILE__,'sideblog_install');
 register_deactivation_hook(__FILE__,'sideblog_uninstall');

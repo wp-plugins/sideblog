@@ -2,8 +2,8 @@
 Contributors: kates
 Donate link: http://www.katesgasis.com/
 Tags: asides, sideblog
-Requires at least: 2.3
-Tested up to: 2.3.3
+Requires at least: 2.5
+Tested up to: 2.5
 Stable tag: trunk
 
 A simple aside plugin.
