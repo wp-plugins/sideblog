@@ -3,7 +3,7 @@
 Plugin Name: Sideblog Wordpress Plugin
 Plugin URI: http://katesgasis.com/2005/10/24/sideblog/
 Description: A simple aside plugin. <br/>Licensed under the <a href="http://www.fsf.org/licensing/licenses/gpl.txt">GPL</a>
-Version: 5.0
+Version: 5.1
 Author: Kates Gasis
 Author URI: http://katesgasis.com
 */
@@ -13,23 +13,18 @@ $sb_defaultformat = "<li>%content% - %permalink%</li>";
 $sb_defaultposts = 10;
 
 function sideblog_post_groupby($groupby){
-	if(is_home()){
-		$groupby = '';
-	}
-	return $groupby;
+	return '';
 }
 add_filter('posts_groupby', 'sideblog_post_groupby');
 
 
 function sideblog_post_filter($query) {
-	global $parent_file, $wpdb; //$wp_query;
-	
-	$sideblog_options = get_option('sideblog_options');
-	
+	global $parent_file, $wpdb;
+
+	$sideblog_options = get_option('sideblog_options');	
 	
 	if((isset($parent_file)||!empty($parent_file))){
-		$query;
-		return;
+		return $query;
 	}
 	
 	if(is_feed()){
@@ -37,7 +32,6 @@ function sideblog_post_filter($query) {
 			$query = sideblog_remove_category($query,$sideblog_options['excludefromfeeds']);
 		}		
 	} else {
-		//if(!is_category() && !is_single() && !is_tag() && !is_archive()){
 		if(is_home()){	
 			if(isset($sideblog_options['setaside']) && !empty($sideblog_options['setaside'])){
 				$query = sideblog_remove_category($query,$sideblog_options['setaside']);
@@ -50,12 +44,15 @@ function sideblog_post_filter($query) {
 function sideblog_remove_category($query,$category){
 	$cat = $query->get('category__in');
 	$cat2 = array_merge($query->get('category__not_in'),$category);
-	foreach($cat2 as $k=>$c){
-		if(in_array($c,$cat)){
-			unset($cat2[$k]);
+	if($cat && $cat2){
+		foreach($cat2 as $k=>$c){
+			if(in_array($c,$cat)){
+				unset($cat2[$k]);
+			}
 		}
 	}
 	$query->set('category__not_in',$cat2);
+ 
 	return $query;
 }
 
@@ -142,7 +139,6 @@ function sideblog($asidecategory=''){
 	$wp_query->set('category__in', array($asideid));
 	$wp_query->set('posts_per_page', $limit);
 	$wp_query->set('category__not_in',array());
-	//$wp_query->set('posts_order_by','DESC');
 	$sideblog_contents = $wp_query->get_posts();
 	$patterns[] = "%title%";
 	$patterns[] = "%content%";
