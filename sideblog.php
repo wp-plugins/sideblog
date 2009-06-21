@@ -223,7 +223,7 @@ function sideblog_metacafe_thumbnail($entry){
 }
 
 function sideblog_vimeo_thumbnail($entry){
-	$vimeo_api_key = "d6f6e4f26ed266e2447a747ae997fa09";
+	$vimeo_api_key = "change this to your vimeo api key";
 	if(!preg_match("/http:\/\/www\.vimeo\.com/", $entry->post_content)){
 		return $entry;
 	}
